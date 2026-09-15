@@ -1,35 +1,63 @@
 import { StyleSheet, Text, View } from "react-native";
+import { colors, fonts, radii } from "../constants/theme";
 
-// type: 'danger' | 'warning' | 'safe'
-export default function AlertBadge({ type = "safe", message }) {
-  const config = {
-    danger: { bg: "#FDECEA", text: "#C62828", label: "⚠ Critical" },
-    warning: { bg: "#FFF4E5", text: "#E65100", label: "⚠ Warning" },
-    safe: { bg: "#E8F5E9", text: "#2E7D32", label: "✓ On Track" },
-  };
-  const { bg, text, label } = config[type] || config.safe;
+const STATUS = {
+  danger: {
+    backgroundColor: colors.criticalBg,
+    label: "Critical",
+    textColor: colors.criticalText,
+  },
+  warning: {
+    backgroundColor: colors.warningBg,
+    label: "Warning",
+    textColor: colors.warningText,
+  },
+  safe: {
+    backgroundColor: colors.primarySoft,
+    label: "On Track",
+    textColor: colors.primaryDark,
+  },
+};
+
+/**
+ * Reusable attendance/status badge for safe, warning, and critical course states.
+ *
+ * @param {{ type?: 'safe' | 'warning' | 'danger', message: string, style?: import('react-native').StyleProp<import('react-native').ViewStyle> }} props
+ */
+export default function AlertBadge({ type = "safe", message, style }) {
+  const status = STATUS[type] ?? STATUS.safe;
 
   return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.label, { color: text }]}>{label}</Text>
-      <Text style={[styles.message, { color: text }]}>{message}</Text>
+    <View
+      accessibilityRole="alert"
+      style={[
+        styles.badge,
+        { backgroundColor: status.backgroundColor },
+        style,
+      ]}
+    >
+      <Text style={[styles.label, { color: status.textColor }]}>{status.label}</Text>
+      <Text style={[styles.message, { color: status.textColor }]}>{message}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
-    borderRadius: 8,
-    padding: 10,
-    marginVertical: 6,
-    marginHorizontal: 16,
+    borderRadius: 24,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   label: {
+    fontFamily: fonts.bodyBold,
     fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 2,
+    marginBottom: 4,
+    textTransform: "uppercase",
   },
   message: {
+    fontFamily: fonts.bodyMedium,
     fontSize: 13,
+    lineHeight: 18,
   },
 });
