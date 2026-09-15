@@ -1,0 +1,190 @@
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { BarChart, ProgressChart } from 'react-native-chart-kit';
+import Card from '../components/Card';
+import CustomButton from '../components/CustomButton';
+import { announcements, ATTENDANCE_THRESHOLD } from '../data/mockData';
+
+const screenWidth = Dimensions.get('window').width;
+
+export default function DashboardView({ courses, setActiveTab }) {
+  // Derived values from course data (data-driven, not hardcoded)
+  const totalCredits = courses.reduce((sum, c) => sum + c.creditHours, 0);
+
+  const overallGPA =
+    courses.length === 0
+      ? 0
+      : (
+          courses.reduce((sum, c) => sum + c.currentGrade, 0) / courses.length / 20
+        ).toFixed(2); // rough 0-5 scale conversion for display
+
+  const overallAttendance =
+    courses.length === 0
+      ? 0
+      : Math.round(
+          courses.reduce((sum, c) => sum + c.attendance, 0) / courses.length
+        );
+
+  // Chart data
+  const barChartData = {
+    labels: courses.map((c) => c.name.split(' ')[0]), // short labels
+    datasets: [{ data: courses.map((c) => c.currentGrade) }],
+  };
+
+  const progressChartData = {
+    labels: courses.map((c) => c.name.split(' ')[0]),
+    data: courses.map((c) => c.attendance / 100),
+  };
+
+  const chartConfig = {
+    backgroundGradientFrom: '#FFFFFF',
+    backgroundGradientTo: '#FFFFFF',
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+    barPercentage: 0.6,
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.header}>Academic Dashboard</Text>
+
+      {/* Summary Cards */}
+      <View style={styles.summaryRow}>
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>GPA</Text>
+          <Text style={styles.summaryValue}>{overallGPA}</Text>
+        </Card>
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Credits</Text>
+          <Text style={styles.summaryValue}>{totalCredits}</Text>
+        </Card>
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Attendance</Text>
+          <Text
+            style={[
+              styles.summaryValue,
+              { color: overallAttendance < ATTENDANCE_THRESHOLD ? '#C62828' : '#2E7D32' },
+            ]}
+          >
+            {overallAttendance}%
+          </Text>
+        </Card>
+      </View>
+
+      {/* Empty state */}
+      {courses.length === 0 ? (
+        <Card>
+          <Text style={styles.emptyText}>
+            No courses added yet. Go to the Simulator to add one.
+          </Text>
+        </Card>
+      ) : (
+        <>
+          {/* Bar Chart: Grades */}
+          <Card>
+            <Text style={styles.chartTitle}>Course-wise Grades</Text>
+            <BarChart
+              data={barChartData}
+              width={screenWidth - 64}
+              height={200}
+              fromZero
+              chartConfig={chartConfig}
+              style={styles.chart}
+              yAxisLabel=""
+              yAxisSuffix=""
+            />
+          </Card>
+
+          {/* Progress Chart: Attendance */}
+          <Card>
+            <Text style={styles.chartTitle}>Attendance vs {ATTENDANCE_THRESHOLD}% Threshold</Text>
+            <ProgressChart
+              data={progressChartData}
+              width={screenWidth - 64}
+              height={200}
+              strokeWidth={12}
+              radius={24}
+              chartConfig={chartConfig}
+              hideLegend={false}
+              style={styles.chart}
+            />
+          </Card>
+        </>
+      )}
+
+      {/* Announcements */}
+      <Card>
+        <Text style={styles.chartTitle}>Announcements</Text>
+        {announcements.map((a) => (
+          <Text key={a.id} style={styles.announcement}>
+            • {a.text}
+          </Text>
+        ))}
+      </Card>
+
+      <CustomButton
+        title="Go to Simulator"
+        onPress={() => setActiveTab('simulator')}
+        style={styles.navButton}
+      />
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1B4332',
+    marginTop: 16,
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+  },
+  summaryCard: {
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1B4332',
+  },
+  chartTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  chart: {
+    borderRadius: 8,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#888',
+    paddingVertical: 12,
+  },
+  announcement: {
+    fontSize: 13,
+    color: '#444',
+    marginVertical: 3,
+  },
+  navButton: {
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+});
