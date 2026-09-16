@@ -21,6 +21,15 @@ const TABLE_SORT_OPTIONS = [
   { label: "Highest Attendance", value: "attendanceDesc" },
 ];
 const ALL_MONTHS = "all";
+const DEFAULT_SECTION = "BSE-7B";
+
+function formatCourseCode(code) {
+  return code.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+function getPortalCourseTitle(course) {
+  return `${formatCourseCode(course.code)}-${course.name} (${DEFAULT_SECTION})`;
+}
 
 function clampScore(value) {
   return Math.max(0, Math.min(100, value));
@@ -167,6 +176,7 @@ export default function SimulatorView({
   const [scoreErrors, setScoreErrors] = useState({});
   const [showLowAttendanceOnly, setShowLowAttendanceOnly] = useState(false);
   const [subjectSortMode, setSubjectSortMode] = useState("default");
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [expandedCourseIds, setExpandedCourseIds] = useState({});
   const [tableSortModes, setTableSortModes] = useState({});
   const [tableMonthFilters, setTableMonthFilters] = useState({});
@@ -253,9 +263,18 @@ export default function SimulatorView({
   };
 
   const toggleCourseExpansion = (courseId) => {
+    setSelectedCourseId(courseId);
     setExpandedCourseIds((currentExpandedIds) => ({
       ...currentExpandedIds,
       [courseId]: !currentExpandedIds[courseId],
+    }));
+  };
+
+  const focusCourseFromSelector = (courseId) => {
+    setSelectedCourseId(courseId);
+    setExpandedCourseIds((currentExpandedIds) => ({
+      ...currentExpandedIds,
+      [courseId]: true,
     }));
   };
 
@@ -266,6 +285,7 @@ export default function SimulatorView({
   const handleResetMockData = () => {
     setShowLowAttendanceOnly(false);
     setSubjectSortMode("default");
+    setSelectedCourseId(null);
     setExpandedCourseIds({});
     setTableSortModes({});
     setTableMonthFilters({});
@@ -281,6 +301,22 @@ export default function SimulatorView({
         style={[
           styles.historyPillText,
           status === "P" ? styles.presentPillText : styles.absentPillText,
+        ]}
+      >
+        {status}
+      </Text>
+    </View>
+  );
+
+  const renderTablePresencePill = (status, key) => (
+    <View
+      key={key}
+      style={[styles.tablePresencePill, status === "P" ? styles.tablePresentPill : styles.tableAbsentPill]}
+    >
+      <Text
+        style={[
+          styles.tablePresenceText,
+          status === "P" ? styles.tablePresentText : styles.tableAbsentText,
         ]}
       >
         {status}
@@ -336,7 +372,7 @@ export default function SimulatorView({
 
       <View style={styles.sortPanel}>
         <View style={styles.controlLabelRow}>
-          <OrganicIcon color={colors.primaryDark} name="sort" size={17} />
+          <OrganicIcon color={colors.matteForest} name="sort" size={17} />
           <Text style={styles.controlLabel}>Sort Subjects</Text>
         </View>
         <View style={styles.optionRow}>
@@ -362,6 +398,33 @@ export default function SimulatorView({
           ))}
         </View>
       </View>
+
+      {hasCourses ? (
+        <View style={styles.courseSelectorShell}>
+          <View style={styles.courseSelectorHeader}>
+            <Text style={styles.courseSelectorTitle}>Subject Attendance</Text>
+            <Text style={styles.courseSelectorMeta}>Tap a code to open ledger</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.coursePillRow}>
+            {courses.map((course) => {
+              const isSelected = selectedCourseId === course.id || expandedCourseIds[course.id];
+              return (
+                <Pressable
+                  accessibilityLabel={`Open attendance ledger for ${course.name}`}
+                  accessibilityRole="button"
+                  key={course.id}
+                  onPress={() => focusCourseFromSelector(course.id)}
+                  style={[styles.courseCodePill, isSelected && styles.courseCodePillActive]}
+                >
+                  <Text style={[styles.courseCodePillText, isSelected && styles.courseCodePillTextActive]}>
+                    {formatCourseCode(course.code)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
 
       {!hasCourses ? (
         <Card style={styles.emptyCard}>
@@ -394,6 +457,7 @@ export default function SimulatorView({
           const scoreRatio = course.expectedScore / 100;
           const scoreError = scoreErrors[course.id];
           const isExpanded = Boolean(expandedCourseIds[course.id]);
+          const isSelected = selectedCourseId === course.id;
           const recentRecords = course.attendanceRecords.slice(-RECENT_HISTORY_LIMIT);
           const tableSortMode = tableSortModes[course.id] ?? "lecture";
           const tableMonthFilter = tableMonthFilters[course.id] ?? ALL_MONTHS;
@@ -408,7 +472,10 @@ export default function SimulatorView({
           return (
             <Card
               key={course.id}
-              style={[attendanceState.type === "danger" && styles.criticalCourseCard]}
+              style={[
+                isSelected && styles.selectedCourseCard,
+                attendanceState.type === "danger" && styles.criticalCourseCard,
+              ]}
             >
               <Pressable
                 accessibilityLabel={`Toggle attendance table for ${course.name}`}
@@ -467,11 +534,26 @@ export default function SimulatorView({
 
               {isExpanded ? (
                 <View style={styles.tableBlock}>
-                  <Text style={styles.tableTitle}>Subject Attendance Detail</Text>
+                  <View style={styles.portalHeaderBlock}>
+                    <Text style={styles.portalCourseTitle}>{getPortalCourseTitle(course)}</Text>
+                    <View style={styles.portalPercentRow}>
+                      <Text style={styles.portalPercentLabel}>Attendance Percentage:</Text>
+                      <View style={styles.portalPercentBanner}>
+                        <View
+                          style={[
+                            styles.portalPercentFill,
+                            attendanceState.type === "danger" && styles.portalPercentFillDanger,
+                            { width: `${Math.min(course.attendance, 100)}%` },
+                          ]}
+                        />
+                        <Text style={styles.portalPercentText}>{course.attendance.toFixed(2)}%</Text>
+                      </View>
+                    </View>
+                  </View>
 
                   <View style={styles.tableControls}>
                     <View style={styles.controlLabelRow}>
-                      <OrganicIcon color={colors.primaryDark} name="sort" size={17} />
+                      <OrganicIcon color={colors.matteForest} name="sort" size={17} />
                       <Text style={styles.controlLabel}>Sort Lectures</Text>
                     </View>
                     <View style={styles.optionRow}>
@@ -503,7 +585,7 @@ export default function SimulatorView({
                     </View>
 
                     <View style={styles.controlLabelRow}>
-                      <OrganicIcon color={colors.primaryDark} name="filter" size={17} />
+                      <OrganicIcon color={colors.matteForest} name="filter" size={17} />
                       <Text style={styles.controlLabel}>Month Filter</Text>
                     </View>
                     <View style={styles.optionRow}>
@@ -552,20 +634,23 @@ export default function SimulatorView({
                         </Text>
                       </View>
                       {visibleTableRecords.length > 0 ? (
-                        visibleTableRecords.map((record) => (
-                          <View key={record.id} style={styles.tableRow}>
-                          <Text style={[styles.tableCell, styles.tableBodyCell, styles.lectureCell]}>
-                            {record.lectureNo}
-                          </Text>
-                          <Text style={[styles.tableCell, styles.tableBodyCell, styles.dateCell]}>
-                            {record.date}
-                          </Text>
-                          <Text style={[styles.tableCell, styles.tableBodyCell, styles.durationCell]}>
-                            {record.durationHours}
-                          </Text>
-                          <View style={[styles.tableCell, styles.tablePresenceBodyCell, styles.presenceCell]}>
-                            {renderPresencePill(record.presence, `${record.id}-presence`)}
-                          </View>
+                        visibleTableRecords.map((record, index) => (
+                          <View
+                            key={record.id}
+                            style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}
+                          >
+                            <Text style={[styles.tableCell, styles.tableBodyCell, styles.lectureCell]}>
+                              {record.lectureNo}
+                            </Text>
+                            <Text style={[styles.tableCell, styles.tableBodyCell, styles.dateCell]}>
+                              {record.date}
+                            </Text>
+                            <Text style={[styles.tableCell, styles.tableBodyCell, styles.durationCell]}>
+                              {record.durationHours}
+                            </Text>
+                            <View style={[styles.tableCell, styles.tablePresenceBodyCell, styles.presenceCell]}>
+                              {renderTablePresencePill(record.presence, `${record.id}-presence`)}
+                            </View>
                           </View>
                         ))
                       ) : (
@@ -685,7 +770,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   eyebrow: {
-    color: colors.primaryDark,
+    color: colors.matteForest,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
     marginBottom: 5,
@@ -705,8 +790,8 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   gpaCard: {
-    backgroundColor: colors.primaryDeep,
-    shadowColor: colors.primaryDeep,
+    backgroundColor: colors.matteForest,
+    shadowColor: colors.matteForest,
   },
   gpaHeaderRow: {
     alignItems: "center",
@@ -714,9 +799,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   metricLabel: {
-    color: "#A7F3D0",
+    color: colors.matteMint,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
+    letterSpacing: 1.1,
     textTransform: "uppercase",
   },
   storageWarningCard: {
@@ -743,6 +829,62 @@ const styles = StyleSheet.create({
   filterButton: {
     width: "100%",
   },
+  courseSelectorShell: {
+    backgroundColor: colors.matteForest,
+    borderRadius: 24,
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingBottom: 14,
+    paddingTop: 14,
+    shadowColor: colors.matteForest,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  courseSelectorHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  courseSelectorTitle: {
+    color: colors.surface,
+    fontFamily: fonts.heading,
+    fontSize: 15,
+  },
+  courseSelectorMeta: {
+    color: colors.matteMint,
+    fontFamily: fonts.bodySemi,
+    fontSize: 11,
+  },
+  coursePillRow: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  courseCodePill: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderRadius: 24,
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 76,
+    paddingHorizontal: 14,
+  },
+  courseCodePillActive: {
+    backgroundColor: colors.matteMint,
+  },
+  courseCodePillText: {
+    color: colors.primarySoft,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+  },
+  courseCodePillTextActive: {
+    color: colors.matteForest,
+  },
   sortPanel: {
     paddingHorizontal: 20,
     paddingTop: 14,
@@ -760,6 +902,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
+    letterSpacing: 1.05,
     textTransform: "uppercase",
   },
   optionRow: {
@@ -769,6 +912,8 @@ const styles = StyleSheet.create({
   },
   optionChip: {
     backgroundColor: colors.surface,
+    borderColor: colors.matteInnerLight,
+    borderWidth: 1,
     borderRadius: radii.pill,
     justifyContent: "center",
     minHeight: 44,
@@ -776,8 +921,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   optionChipActive: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primaryDeep,
+    backgroundColor: colors.matteForest,
+    shadowColor: colors.matteForest,
   },
   optionChipText: {
     color: colors.textMuted,
@@ -813,8 +958,12 @@ const styles = StyleSheet.create({
     marginTop: 18,
     width: "100%",
   },
+  selectedCourseCard: {
+    shadowColor: colors.matteForest,
+    shadowOpacity: 0.04,
+  },
   criticalCourseCard: {
-    backgroundColor: "#FFF7F7",
+    backgroundColor: "#FFF8F6",
     shadowColor: colors.criticalText,
   },
   courseHeader: {
@@ -829,13 +978,13 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   courseHeaderPressed: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.matteSurfaceRaised,
   },
   courseTitleBlock: {
     flex: 1,
   },
   courseCode: {
-    color: colors.primaryDark,
+    color: colors.matteForest,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
     marginBottom: 3,
@@ -855,7 +1004,7 @@ const styles = StyleSheet.create({
   creditBadge: {
     backgroundColor: colors.primarySoft,
     borderRadius: radii.pill,
-    color: colors.primaryDark,
+    color: colors.matteForest,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
     overflow: "hidden",
@@ -874,7 +1023,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   progressTrack: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: colors.matteLine,
     borderRadius: radii.pill,
     flexDirection: "row",
     height: 9,
@@ -882,20 +1031,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   attendanceFill: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.matteForest,
   },
   attendanceFillDanger: {
     backgroundColor: colors.criticalText,
   },
   recoveryPanel: {
-    backgroundColor: colors.blueSoft,
+    backgroundColor: colors.primarySoft,
     borderRadius: 18,
     gap: 5,
     marginTop: 16,
     padding: 16,
   },
   recoveryTitle: {
-    color: colors.blue,
+    color: colors.matteForest,
     fontFamily: fonts.bodyBold,
     fontSize: 13,
     textTransform: "uppercase",
@@ -927,7 +1076,7 @@ const styles = StyleSheet.create({
   },
   presentPill: {
     backgroundColor: colors.primarySoft,
-    shadowColor: colors.primaryDeep,
+    shadowColor: colors.matteForest,
   },
   absentPill: {
     backgroundColor: colors.criticalBg,
@@ -938,7 +1087,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   presentPillText: {
-    color: colors.primaryDark,
+    color: colors.matteForest,
   },
   absentPillText: {
     color: colors.criticalText,
@@ -946,29 +1095,64 @@ const styles = StyleSheet.create({
   tableBlock: {
     marginTop: 18,
   },
-  tableTitle: {
+  portalHeaderBlock: {
+    backgroundColor: colors.matteSurfaceRaised,
+    borderRadius: 18,
+    marginBottom: 14,
+    padding: 14,
+  },
+  portalCourseTitle: {
     color: colors.text,
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  portalPercentRow: {
+    gap: 8,
+  },
+  portalPercentLabel: {
+    color: colors.text,
+    fontFamily: fonts.bodySemi,
+    fontSize: 12,
+  },
+  portalPercentBanner: {
+    backgroundColor: colors.matteLine,
+    borderRadius: radii.pill,
+    height: 22,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  portalPercentFill: {
+    backgroundColor: colors.matteForest,
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    top: 0,
+  },
+  portalPercentFillDanger: {
+    backgroundColor: colors.criticalText,
+  },
+  portalPercentText: {
+    color: colors.surface,
     fontFamily: fonts.bodyBold,
-    fontSize: 13,
-    marginBottom: 8,
+    fontSize: 12,
+    textAlign: "center",
   },
   attendanceTable: {
-    borderColor: "#8EC5FF",
-    borderLeftWidth: 1,
-    borderTopWidth: 1,
     minWidth: 456,
   },
   tableRow: {
     flexDirection: "row",
   },
   tableHeaderRow: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.matteForest,
   },
   emptyTableRow: {
     alignItems: "center",
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderColor: "#8EC5FF",
+    borderColor: colors.matteLine,
     borderRightWidth: 1,
     justifyContent: "center",
     minHeight: 42,
@@ -978,10 +1162,10 @@ const styles = StyleSheet.create({
   tableCell: {
     alignItems: "center",
     borderBottomWidth: 1,
-    borderColor: "#8EC5FF",
+    borderColor: colors.matteLine,
     borderRightWidth: 1,
     justifyContent: "center",
-    minHeight: 38,
+    minHeight: 40,
     paddingHorizontal: 8,
     textAlign: "center",
   },
@@ -990,16 +1174,43 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 12,
   },
+  tableRowAlternate: {
+    backgroundColor: colors.matteSurfaceRaised,
+  },
   tableBodyCell: {
-    backgroundColor: colors.surface,
+    backgroundColor: "transparent",
     color: colors.text,
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
     paddingVertical: 10,
   },
   tablePresenceBodyCell: {
-    backgroundColor: colors.surface,
+    backgroundColor: "transparent",
     paddingVertical: 5,
+  },
+  tablePresencePill: {
+    alignItems: "center",
+    borderRadius: 999,
+    justifyContent: "center",
+    minHeight: 28,
+    minWidth: 44,
+    paddingHorizontal: 12,
+  },
+  tablePresentPill: {
+    backgroundColor: colors.primarySoft,
+  },
+  tableAbsentPill: {
+    backgroundColor: colors.criticalBg,
+  },
+  tablePresenceText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+  },
+  tablePresentText: {
+    color: colors.matteForest,
+  },
+  tableAbsentText: {
+    color: colors.criticalText,
   },
   lectureCell: {
     width: 88,
@@ -1014,7 +1225,7 @@ const styles = StyleSheet.create({
     width: 92,
   },
   scoreFill: {
-    backgroundColor: colors.blue,
+    backgroundColor: colors.matteForest,
   },
   scoreHeader: {
     alignItems: "center",
@@ -1047,7 +1258,7 @@ const styles = StyleSheet.create({
   },
   scoreInput: {
     backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
+    borderColor: colors.matteLine,
     borderRadius: 18,
     borderWidth: 1,
     color: colors.text,

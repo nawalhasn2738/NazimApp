@@ -13,7 +13,9 @@ export default function Card({ children, style }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
+    borderColor: colors.matteInnerLight,
     borderRadius: radii.card,
+    borderWidth: 1,
     marginHorizontal: 16,
     marginVertical: 11,
     padding: 20,

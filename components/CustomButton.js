@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, fonts, radii } from "../constants/theme";
+import { colors, fonts, radii, shadow } from "../constants/theme";
 import OrganicIcon from "./OrganicIcon";
 
 /**
@@ -18,7 +18,7 @@ export default function CustomButton({
 }) {
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
-  const iconColor = isPrimary || isDanger ? colors.surface : colors.primaryDark;
+  const iconColor = isPrimary || isDanger ? colors.surface : colors.matteForest;
 
   return (
     <Pressable
@@ -41,7 +41,7 @@ export default function CustomButton({
         <ActivityIndicator color={iconColor} />
       ) : (
         <View style={styles.contentRow}>
-          {icon ? <OrganicIcon color={iconColor} name={icon} size={19} strokeWidth={2.4} /> : null}
+          {icon ? <OrganicIcon color={iconColor} name={icon} size={19} strokeWidth={1.9} /> : null}
           <Text
             numberOfLines={2}
             style={[
@@ -62,11 +62,14 @@ export default function CustomButton({
 const styles = StyleSheet.create({
   button: {
     alignItems: "center",
+    borderColor: colors.matteInnerLight,
     borderRadius: 24,
+    borderWidth: 1,
     justifyContent: "center",
     minHeight: 50,
     paddingHorizontal: 18,
     paddingVertical: 13,
+    ...shadow,
   },
   contentRow: {
     alignItems: "center",
@@ -75,31 +78,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primary: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.matteForest,
   },
   secondary: {
     backgroundColor: colors.primarySoft,
+    borderColor: colors.matteInnerDark,
   },
   danger: {
     backgroundColor: colors.criticalText,
+    borderColor: colors.criticalBorder,
   },
   disabled: {
     opacity: 0.45,
   },
   pressed: {
-    opacity: 0.82,
+    opacity: 0.84,
     transform: [{ scale: 0.99 }],
   },
   text: {
     fontFamily: fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 13,
+    letterSpacing: 0.45,
     textAlign: "center",
+    textTransform: "uppercase",
   },
   primaryText: {
     color: colors.surface,
   },
   secondaryText: {
-    color: colors.primaryDark,
+    color: colors.matteForest,
   },
   dangerText: {
     color: colors.surface,

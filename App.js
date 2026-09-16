@@ -5,7 +5,8 @@ import {
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, SafeAreaView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { announcements } from "./data/mockData";
 import useSimulatorState from "./hooks/useSimulatorState";
 import DashboardView from "./screens/DashboardView";
@@ -35,36 +36,40 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.safeArea}>
+          <View style={styles.loadingState}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      {activeTab === "dashboard" ? (
-        <DashboardView
-          announcements={announcements}
-          courses={courses}
-          setActiveTab={setActiveTab}
-        />
-      ) : (
-        <SimulatorView
-          courses={courses}
-          isLoading={isRestoring}
-          projectedGpa={projectedGpa}
-          recoveryPlans={recoveryPlans}
-          resetCourses={resetCourses}
-          setActiveTab={setActiveTab}
-          storageError={storageError}
-          updateCourse={updateCourse}
-        />
-      )}
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.safeArea}>
+        <StatusBar style="dark" />
+        {activeTab === "dashboard" ? (
+          <DashboardView
+            announcements={announcements}
+            courses={courses}
+            setActiveTab={setActiveTab}
+          />
+        ) : (
+          <SimulatorView
+            courses={courses}
+            isLoading={isRestoring}
+            projectedGpa={projectedGpa}
+            recoveryPlans={recoveryPlans}
+            resetCourses={resetCourses}
+            setActiveTab={setActiveTab}
+            storageError={storageError}
+            updateCourse={updateCourse}
+          />
+        )}
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

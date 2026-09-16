@@ -15,7 +15,7 @@ const STATUS = {
   safe: {
     backgroundColor: colors.primarySoft,
     label: "On Track",
-    textColor: colors.primaryDark,
+    textColor: colors.matteForest,
   },
 };
 
@@ -44,14 +44,17 @@ export default function AlertBadge({ type = "safe", message, style }) {
 
 const styles = StyleSheet.create({
   badge: {
+    borderColor: colors.matteInnerLight,
     borderRadius: 24,
+    borderWidth: 1,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 13,
   },
   label: {
     fontFamily: fonts.bodyBold,
-    fontSize: 12,
+    fontSize: 11,
+    letterSpacing: 1.05,
     marginBottom: 4,
     textTransform: "uppercase",
   },
