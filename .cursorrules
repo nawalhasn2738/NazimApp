@@ -1,0 +1,10 @@
+Design rules (must follow):
+- Accent is emerald only (#10B981 header, #059669 buttons). Never use blue except as a course line color.
+- Risk is red #D64560 only. No other status colors.
+- No navbar, tab bar, drawer, or floating action buttons.
+- Rows are flat: white, 1px #E5E7EB border, 6px radius, no shadow, 12px padding.
+- Spacing only from 4/8/12/16/24/32. Font sizes only 12/14/16/20/28. Weights 400/500/600.
+- Max 3 screens: Today, Attendance, Simulator. Alerts are a popover.
+- Do not add features, screens, or controls that were not requested.
+
+After every Cursor run, open the search (Ctrl+Shift+F) and look for leftovers: blue, #2563, shadow, rounded-2xl, fixed bottom. If they show up, tell Cursor to remove them.
