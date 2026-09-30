@@ -103,7 +103,7 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
   const weekSchedule = days.map((_, dayIndex) => placedOccurrences.filter((item) => item.dayIndex === dayIndex));
   const scheduledClasses = [...weekSchedule[selectedIndex]].sort((a, b) => toMinutes(a.detail.start) - toMinutes(b.detail.start));
   const averageAttendance = courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + course.attendance, 0) / courses.length) : 0;
-  const atRiskCount = courses.filter((course) => course.attendance < 75).length;
+  const atRiskCount = courses.filter((course) => course.classesHeld > 0 && course.attendance < 75).length;
   const overlaps = new Map();
   const weekConflicts = new Set();
 

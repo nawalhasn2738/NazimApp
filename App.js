@@ -64,13 +64,13 @@ export default function App() {
     );
   }
 
-  const atRisk = courses.filter((course) => course.attendance < ATTENDANCE_THRESHOLD);
+  const atRisk = courses.filter((course) => course.classesHeld > 0 && course.attendance < ATTENDANCE_THRESHOLD);
   const openSimulatorScreen = (courseId) => {
     openSimulator(courseId);
   };
 
   const alertItems = courses
-    .filter((course) => course.attendance < ATTENDANCE_THRESHOLD || recoveryPlans[course.id]?.safeMisses === 0)
+    .filter((course) => course.classesHeld > 0 && (course.attendance < ATTENDANCE_THRESHOLD || recoveryPlans[course.id]?.safeMisses === 0))
     .map((course) => {
       const isRisk = course.attendance < ATTENDANCE_THRESHOLD;
       const classesToRecover = Math.max(0, 3 * course.classesHeld - 4 * course.classesAttended);
@@ -108,6 +108,7 @@ export default function App() {
             dismissAnnouncement={dismissAnnouncement}
             gpaDelta={gpaDelta}
             isLoading={isRestoring}
+            onAddCourse={addCourse}
             onBack={() => setDashboardScreen("today")}
             onOpenAlerts={() => setAlertsOpen(true)}
             onOpenSimulator={openSimulatorScreen}

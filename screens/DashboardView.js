@@ -1,52 +1,45 @@
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { BarChart, LineChart } from "react-native-chart-kit";
+import { Line, Svg, Text as SvgText } from "react-native-svg";
 import AppBar from "../components/AppBar";
+import AddCourseModal from "../components/AddCourseModal";
 import Card from "../components/Card";
 import CourseRow from "../components/CourseRow";
 import CustomButton from "../components/CustomButton";
-import InteractiveChart from "../components/InteractiveChart";
 import Icon from "../components/Icon";
 import ProgressRing from "../components/ProgressRing";
 import { colors, fonts, radii } from "../constants/theme";
 import { ATTENDANCE_THRESHOLD } from "../data/mockData";
-import useLayout from "../hooks/useLayout";
 import {
-  BAR_BASE_WIDTH,
-  BAR_PERCENTAGE,
-  buildAttendanceByCourseData,
   buildAttendanceTrend,
   calculateAverageAttendance,
-  describeLecture,
-  getBarIndexFromX,
-  getBarPoint,
-  getLineIndexFromX,
-  getLinePoint,
 } from "../utils/chartData";
+import { formatCourseCode } from "../utils/attendance";
 
 const CHART_HEIGHT = 220;
+const BAR_PLOT_HEIGHT = 180;
+const BAR_LABEL_HEIGHT = 28;
+const BAR_CHART_HEIGHT = BAR_PLOT_HEIGHT / 0.75;
+const BAR_CARD_GUTTER = 64;
 const baseChartConfig = {
-  backgroundGradientFrom: colors.card,
-  backgroundGradientTo: colors.card,
-  barPercentage: BAR_PERCENTAGE,
-  color: () => colors.inkMuted,
+  backgroundGradientFrom: "#FFFFFF",
+  backgroundGradientTo: "#FFFFFF",
+  barPercentage: 0.55,
+  color: () => "#6B7280",
   decimalPlaces: 0,
-  labelColor: () => colors.inkMuted,
-  propsForBackgroundLines: { stroke: colors.line, strokeDasharray: "4 6" },
-  propsForLabels: { fontFamily: fonts.bodyMedium, fontSize: 12 },
+  labelColor: () => "#6B7280",
+  propsForBackgroundLines: { stroke: "#E5E7EB" },
+  propsForLabels: { fill: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12 },
   propsForTopLabels: { fill: colors.ink, fontFamily: fonts.bodyBold, fontSize: 12 },
 };
 
 // Trend line uses the single interactive accent with hollow markers.
 const lineChartConfig = {
   ...baseChartConfig,
-  propsForDots: { fill: colors.card, r: "6", stroke: colors.accent, strokeWidth: "3" },
-  strokeWidth: 3.5,
+  propsForDots: { fill: "#FFFFFF", r: "3", stroke: "#10B981", strokeWidth: "2" },
+  strokeWidth: 2,
 };
-
-// Bar: solid capsule bars (per-bar red / green colors come from the data).
-const barChartConfig = { ...baseChartConfig, barRadius: (BAR_BASE_WIDTH * BAR_PERCENTAGE) / 2 };
-
 
 /**
  * Home screen: app bar (alerts bell + overflow menu), an at-a-glance gauge,
@@ -62,6 +55,7 @@ export default function DashboardView({
   dismissAnnouncement,
   gpaDelta,
   isLoading = false,
+  onAddCourse,
   onOpenSimulator,
   projectedGpa,
   recoveryPlans = {},
@@ -71,11 +65,35 @@ export default function DashboardView({
   onBack,
   onOpenAlerts,
 }) {
-  const { contentWidth, isWide } = useLayout();
+  const { width: windowWidth } = useWindowDimensions();
   const [lineIndex, setLineIndex] = useState(null);
-  const [barIndex, setBarIndex] = useState(null);
-  // Charts fit their column: half the shell on wide windows, the full width on phones.
-  const chartWidth = Math.max(Math.min((isWide ? contentWidth / 2 : contentWidth) - 72, 560), 260);
+  const [selectedBarCourseId, setSelectedBarCourseId] = useState(null);
+  const [addCourseOpen, setAddCourseOpen] = useState(false);
+  const [courseToast, setCourseToast] = useState(null);
+  const toastTimer = useRef(null);
+  const barFade = useRef(new Animated.Value(0)).current;
+  const chartWidth = Math.max(Math.min(windowWidth, 480) - 56, 0);
+  const barDataSignature = courses.map((course) => course.id + ":" + course.attendance).join("|");
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  useEffect(() => {
+    barFade.setValue(0);
+    Animated.timing(barFade, {
+      duration: 250,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [barDataSignature, barFade]);
+
+  const handleAddCourse = (course) => {
+    onAddCourse(course);
+    setCourseToast(`${course.code} added`);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setCourseToast(null), 2000);
+  };
 
   if (isLoading) {
     return (
@@ -87,7 +105,7 @@ export default function DashboardView({
 
   const averageAttendance = calculateAverageAttendance(courses);
   const rankedCourses = [...courses].sort((a, b) => a.attendance - b.attendance);
-  const atRisk = rankedCourses.filter((course) => course.attendance < ATTENDANCE_THRESHOLD);
+  const atRisk = rankedCourses.filter((course) => course.classesHeld > 0 && course.attendance < ATTENDANCE_THRESHOLD);
   const delta = Number(gpaDelta);
   const ringColor = averageAttendance < ATTENDANCE_THRESHOLD ? colors.bad : colors.good;
 
@@ -147,17 +165,21 @@ export default function DashboardView({
   const coursesBlock = (
     <>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Your courses</Text>
-        <Text style={styles.sectionMeta}>lowest attendance first</Text>
+        <View style={styles.sectionHeadingCopy}>
+          <Text style={styles.sectionTitle}>Your courses</Text>
+          <Text style={styles.sectionMeta}>lowest attendance first</Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => setAddCourseOpen(true)} style={styles.addCourseButton}>
+          <Text style={styles.addCourseText}>+ Add course</Text>
+        </Pressable>
       </View>
       {courses.length === 0 ? (
         <Card>
-          <Text style={styles.emptyTitle}>No courses yet</Text>
-          <Text style={styles.emptyText}>Open the simulator to add a course or restore the sample data.</Text>
+          <Text style={styles.emptyText}>No courses yet. Add your first course.</Text>
         </Card>
       ) : (
         rankedCourses.map((course) => {
-          const isLow = course.attendance < ATTENDANCE_THRESHOLD;
+          const isLow = course.classesHeld > 0 && course.attendance < ATTENDANCE_THRESHOLD;
           const needed = recoveryPlans[course.id]?.classesToRecover ?? 0;
           return (
             <CourseRow
@@ -173,101 +195,219 @@ export default function DashboardView({
     </>
   );
 
-  // ----- touch-interactive charts -----
+  // ----- attendance insights -----
   const trend = buildAttendanceTrend(courses);
   const trendValues = trend.datasets[0].data;
-  const barData = buildAttendanceByCourseData(courses);
-  const barValues = barData.datasets[0].data;
-  const barCourses = [...courses].sort((a, b) => a.attendance - b.attendance); // same order as the chart
-  // Ignore a stale selection if the data shrank (e.g. a course was removed).
+  const barCourses = [...courses].sort((a, b) => a.attendance - b.attendance);
+  const barData = {
+    labels: barCourses.map((course) => course.code ?? course.shortName),
+    datasets: [{
+      data: barCourses.map((course) => course.attendance),
+      colors: barCourses.map((course) => () =>
+        course.attendance >= ATTENDANCE_THRESHOLD ? "#10B981" : "#D64560"
+      ),
+    }],
+  };
+  const barAvailableWidth = Math.max(chartWidth - BAR_CARD_GUTTER, 0);
+  const barSlotWidth = courses.length > 6 ? 56 : Math.min(barAvailableWidth / barCourses.length, 96);
+  const barChartWidth = barSlotWidth * barCourses.length;
+  const barWidth = barSlotWidth * 0.72;
+  const barPercentage = barWidth / 32;
+  const barChartLeft = -(barWidth - barSlotWidth / 2);
+  const selectedBarCourse = barCourses.find((course) => course.id === selectedBarCourseId) ?? null;
+  const layeredBarChartConfig = {
+    ...baseChartConfig,
+    backgroundGradientFromOpacity: 0,
+    backgroundGradientToOpacity: 0,
+    barPercentage,
+    barRadius: barWidth / 2,
+  };
   const lineSel = lineIndex !== null && lineIndex < trendValues.length ? lineIndex : null;
-  const barSel = barIndex !== null && barIndex < barValues.length ? barIndex : null;
-
-  let lineSelected = null;
-  if (lineSel !== null) {
-    const point = getLinePoint(trendValues, lineSel, chartWidth, CHART_HEIGHT);
-    const info = describeLecture(courses, lineSel);
-    lineSelected = { ...point, bubble: `Lecture ${info.lecture} - ${info.average}%` };
-  }
-
-  let barSelected = null;
-  if (barSel !== null) {
-    const point = getBarPoint(barValues, barSel, chartWidth, CHART_HEIGHT);
-    const course = barCourses[barSel];
-    barSelected = { ...point, bubble: `${course.shortName} - ${course.attendance}%` };
-  }
+  const requirementY = 16 + (CHART_HEIGHT * 0.75) * 0.25;
+  const lineData = {
+    labels: trend.labels,
+    datasets: [
+      { ...trend.datasets[0], color: () => "#10B981", strokeWidth: 2 },
+      { data: [0, 100], color: () => "rgba(255,255,255,0)", strokeWidth: 0, withDots: false },
+    ],
+  };
 
   const chartsBlock =
     courses.length > 0 ? (
-      <>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Attendance insights</Text>
-        </View>
-        <Card>
-          <Text style={styles.chartTitle}>Trend by lecture</Text>
-          <Text style={styles.chartHint}>Average attendance across all courses</Text>
-          <View style={styles.chartWrap}>
-            <InteractiveChart
-              height={CHART_HEIGHT}
-              indexFromX={(x) => getLineIndexFromX(trendValues.length, x, chartWidth)}
-              kind="line"
-              label="Trend chart. Press or drag to inspect a lecture"
-              onSelect={setLineIndex}
-              selected={lineSelected}
-              selectedIndex={lineSel}
-              referenceValue={ATTENDANCE_THRESHOLD}
-              width={chartWidth}
-            >
+      <View style={styles.insightsSection}>
+        <Text style={styles.insightsHeading}>Insights</Text>
+        <View style={styles.insightsStack}>
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Attendance trend</Text>
+            <Text style={styles.chartHint}>Average across all courses by lecture</Text>
+            <View style={styles.chartWrap}>
               <LineChart
-                bezier
                 chartConfig={lineChartConfig}
-                data={{ ...trend, datasets: [{ ...trend.datasets[0], color: () => colors.accent }] }}
+                data={lineData}
+                decorator={() => (
+                  <Line stroke="#9CA3AF" strokeDasharray="5 5" strokeWidth="1"
+                    x1="64" x2={chartWidth - 16} y1={requirementY} y2={requirementY} />
+                )}
                 fromZero
                 fromNumber={100}
                 height={CHART_HEIGHT}
+                onDataPointClick={({ index }) => {
+                  if (index < trendValues.length) setLineIndex(index);
+                }}
                 segments={4}
                 withOuterLines={false}
+                withShadow={false}
                 withVerticalLines={false}
                 width={chartWidth}
                 yAxisSuffix="%"
               />
-            </InteractiveChart>
+            </View>
+            {lineSel !== null ? (
+              <Text style={styles.chartSelection}>Lecture {lineSel + 1}: {trendValues[lineSel]}%</Text>
+            ) : null}
           </View>
-        </Card>
-        <Card>
-          <Text style={styles.chartTitle}>By course</Text>
-          <Text style={styles.chartHint}>Red bars are below {ATTENDANCE_THRESHOLD}%</Text>
-          <View style={styles.chartWrap}>
-            <InteractiveChart
-              height={CHART_HEIGHT}
-              indexFromX={(x) => getBarIndexFromX(barValues.length, x, chartWidth)}
-              kind="bar"
-              label="Course chart. Press a bar to inspect a course"
-              onSelect={setBarIndex}
-              selected={barSelected}
-              selectedIndex={barSel}
-              referenceValue={ATTENDANCE_THRESHOLD}
-              width={chartWidth}
-            >
-              <BarChart
-                chartConfig={barChartConfig}
-                data={barData}
-                flatColor
-                fromZero
-                fromNumber={100}
-                height={CHART_HEIGHT}
-                segments={4}
-                showBarTops={false}
-                showValuesOnTopOfBars
-                width={chartWidth}
-                withCustomBarColorFromData
-                yAxisLabel=""
-                yAxisSuffix="%"
-              />
-            </InteractiveChart>
+          <View style={[styles.chartCard, styles.barChartCard]}>
+            <Text style={styles.chartTitle}>By course</Text>
+            <Text style={styles.chartHint}>Current attendance per course</Text>
+            <Pressable onPress={() => setSelectedBarCourseId(null)} style={styles.barViewport}>
+              <ScrollView
+                contentContainerStyle={[
+                  courses.length <= 6 && styles.barScrollCentered,
+                ]}
+                horizontal
+                scrollEnabled={courses.length > 6}
+                showsHorizontalScrollIndicator={false}
+              >
+                <Animated.View style={[styles.layeredBarChart, { opacity: barFade, width: barChartWidth }]}>
+                  <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                    {barCourses.map((course, index) => (
+                      <View
+                        key={"track-" + course.id}
+                        style={[
+                          styles.barTrack,
+                          {
+                            left: index * barSlotWidth + (barSlotWidth - barWidth) / 2,
+                            width: barWidth,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Svg height={BAR_PLOT_HEIGHT} pointerEvents="none" style={styles.barReference} width={barChartWidth}>
+                    <Line
+                      stroke="#9CA3AF"
+                      strokeDasharray="4 4"
+                      strokeWidth="1"
+                      x1="0"
+                      x2={barChartWidth}
+                      y1={BAR_PLOT_HEIGHT * 0.25}
+                      y2={BAR_PLOT_HEIGHT * 0.25}
+                    />
+                    <SvgText
+                      fill="#6B7280"
+                      fontFamily={fonts.bodyMedium}
+                      fontSize="12"
+                      textAnchor="start"
+                      x="4"
+                      y={BAR_PLOT_HEIGHT * 0.25 - 5}
+                    >
+                      75%
+                    </SvgText>
+                  </Svg>
+                  <BarChart
+                    chartConfig={layeredBarChartConfig}
+                    data={barData}
+                    flatColor
+                    fromNumber={100}
+                    fromZero
+                    height={BAR_CHART_HEIGHT}
+                    segments={4}
+                    showBarTops={false}
+                    showValuesOnTopOfBars={false}
+                    style={StyleSheet.flatten([styles.chartKitBarLayer, { left: barChartLeft }])}
+                    width={barChartWidth}
+                    withCustomBarColorFromData
+                    withHorizontalLabels={false}
+                    withInnerLines={false}
+                    withVerticalLabels={false}
+                    yAxisLabel=""
+                    yAxisSuffix="%"
+                  />
+                  {barCourses.map((course, index) => {
+                    const value = Math.max(0, Math.min(100, course.attendance));
+                    const fillHeight = (value / 100) * BAR_PLOT_HEIGHT;
+                    const insideFill = fillHeight >= 40;
+                    return (
+                      <Text
+                        key={"value-" + course.id}
+                        pointerEvents="none"
+                        style={[
+                          styles.barValue,
+                          {
+                            color: insideFill ? "#FFFFFF" : "#1F2937",
+                            left: index * barSlotWidth,
+                            top: insideFill
+                              ? BAR_PLOT_HEIGHT - fillHeight + 18
+                              : Math.max(0, BAR_PLOT_HEIGHT - fillHeight - 18),
+                            width: barSlotWidth,
+                          },
+                        ]}
+                      >
+                        {value}%
+                      </Text>
+                    );
+                  })}
+                  {barCourses.map((course, index) => (
+                    <Text
+                      key={"label-" + course.id}
+                      numberOfLines={1}
+                      pointerEvents="none"
+                      style={[styles.barCourseLabel, { left: index * barSlotWidth, width: barSlotWidth }]}
+                    >
+                      {formatCourseCode(course.code)}
+                    </Text>
+                  ))}
+                  {barCourses.map((course, index) => {
+                    const below = course.attendance < ATTENDANCE_THRESHOLD;
+                    return (
+                      <Pressable
+                        accessibilityLabel={
+                          course.name + ", " + course.attendance +
+                          " percent attendance, " +
+                          (below ? "below" : "at or above") +
+                          " the 75 percent requirement"
+                        }
+                        accessibilityRole="button"
+                        key={"touch-" + course.id}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          setSelectedBarCourseId((current) => current === course.id ? null : course.id);
+                        }}
+                        style={[styles.barTouchTarget, { left: index * barSlotWidth, width: barSlotWidth }]}
+                      />
+                    );
+                  })}
+                </Animated.View>
+              </ScrollView>
+            </Pressable>
+            <View style={styles.barLegend}>
+              <View style={styles.barLegendItem}>
+                <View style={[styles.barLegendDot, styles.barLegendOnTrack]} />
+                <Text style={styles.barLegendText}>On track</Text>
+              </View>
+              <View style={styles.barLegendItem}>
+                <View style={[styles.barLegendDot, styles.barLegendRisk]} />
+                <Text style={styles.barLegendText}>Below 75%</Text>
+              </View>
+            </View>
+            {selectedBarCourse ? (
+              <Text style={styles.chartSelection}>
+                {selectedBarCourse.name} · {selectedBarCourse.classesAttended} of {selectedBarCourse.classesHeld} classes · {selectedBarCourse.attendance}%
+              </Text>
+            ) : null}
           </View>
-        </Card>
-      </>
+        </View>
+      </View>
     ) : null;
 
   const announcementsBlock = (
@@ -327,24 +467,14 @@ export default function DashboardView({
           </Card>
         ) : null}
 
-        {isWide ? (
-          <View style={styles.columns}>
-            <View style={styles.column}>
-              {heroBlock}
-              {coursesBlock}
-              {announcementsBlock}
-            </View>
-            <View style={styles.column}>{chartsBlock}</View>
-          </View>
-        ) : (
-          <>
-            {view === "today" ? heroBlock : null}
-            {coursesBlock}
-            {view === "today" ? chartsBlock : null}
-            {view === "today" ? announcementsBlock : null}
-          </>
-        )}
+        {view === "today" ? heroBlock : null}
+        {coursesBlock}
+        {view === "attendance" ? chartsBlock : null}
+        {view === "today" ? announcementsBlock : null}
       </ScrollView>
+
+      <AddCourseModal courses={courses} onClose={() => setAddCourseOpen(false)} onSubmit={handleAddCourse} visible={addCourseOpen} />
+      {courseToast ? <View style={styles.toast}><Text style={styles.toastText}>{courseToast}</Text></View> : null}
 
     </View>
   );
@@ -357,8 +487,6 @@ const styles = StyleSheet.create({
   centerTitle: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 14 },
   warnCard: { backgroundColor: colors.warnSoft },
   warnText: { color: colors.warn, fontFamily: fonts.bodySemi, fontSize: 14, lineHeight: 20 },
-  columns: { alignItems: "flex-start", flexDirection: "row" },
-  column: { flex: 1 },
   ringRow: { flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingTop: 8 },
   ringCard: { alignItems: "center", flex: 1, marginHorizontal: 0, paddingHorizontal: 12 },
   ringValue: { color: colors.ink, fontFamily: fonts.headingExtra, fontSize: 20 },
@@ -370,19 +498,45 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   statSub: { fontFamily: fonts.bodyBold, fontSize: 12, marginTop: 4 },
   note: { color: colors.inkMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: 16 },
-  sectionHeader: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 8, paddingTop: 24 },
+  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 8, paddingTop: 24 },
+  sectionHeadingCopy: { flex: 1 },
   sectionTitle: { color: colors.ink, fontFamily: fonts.heading, fontSize: 20 },
-  sectionMeta: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  sectionMeta: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
+  addCourseButton: { alignItems: "center", height: 44, justifyContent: "center", paddingHorizontal: 8 },
+  addCourseText: { color: "#059669", fontFamily: fonts.bodySemi, fontSize: 14 },
   emptyTitle: { color: colors.ink, fontFamily: fonts.heading, fontSize: 16, marginBottom: 4 },
   emptyText: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 14, lineHeight: 20 },
   restore: { marginTop: 16 },
-  chartTitle: { color: colors.ink, fontFamily: fonts.heading, fontSize: 16 },
-  chartHint: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 8, marginTop: 4 },
-  chartWrap: { alignSelf: "center", marginLeft: -8 },
+  insightsSection: { marginTop: 24, paddingHorizontal: 16 },
+  insightsHeading: { color: "#1F2937", fontFamily: fonts.heading, fontSize: 16, marginBottom: 12 },
+  insightsStack: { gap: 12 },
+  chartCard: { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", borderRadius: 6, borderWidth: 1, overflow: "hidden", padding: 12 },
+  barChartCard: { marginRight: BAR_CARD_GUTTER },
+  chartTitle: { color: "#1F2937", fontFamily: fonts.bodySemi, fontSize: 14 },
+  chartHint: { color: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12, marginBottom: 8, marginTop: 4 },
+  chartWrap: { alignSelf: "center" },
+  chartSelection: { color: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12, marginTop: 4 },
+  barViewport: { width: "100%" },
+  barScrollCentered: { flexGrow: 1 },
+  layeredBarChart: { height: BAR_PLOT_HEIGHT + BAR_LABEL_HEIGHT, overflow: "hidden", position: "relative" },
+  barTrack: { backgroundColor: "#F3F4F6", borderTopLeftRadius: 999, borderTopRightRadius: 999, height: BAR_PLOT_HEIGHT, position: "absolute", top: 0 },
+  barReference: { left: 0, position: "absolute", top: 0, zIndex: 1 },
+  chartKitBarLayer: { paddingRight: 0, paddingTop: 0, position: "absolute", top: 0, zIndex: 2 },
+  barValue: { fontFamily: fonts.bodySemi, fontSize: 12, position: "absolute", textAlign: "center", zIndex: 3 },
+  barCourseLabel: { color: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12, height: BAR_LABEL_HEIGHT, paddingTop: 8, position: "absolute", textAlign: "center", top: BAR_PLOT_HEIGHT, zIndex: 3 },
+  barTouchTarget: { height: BAR_PLOT_HEIGHT + BAR_LABEL_HEIGHT, position: "absolute", top: 0, zIndex: 4 },
+  barLegend: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 12 },
+  barLegendItem: { alignItems: "center", flexDirection: "row", gap: 4 },
+  barLegendDot: { borderRadius: radii.pill, height: 8, width: 8 },
+  barLegendOnTrack: { backgroundColor: "#10B981" },
+  barLegendRisk: { backgroundColor: "#D64560" },
+  barLegendText: { color: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12 },
   noteCard: { alignItems: "flex-start", flexDirection: "row", gap: 8, paddingVertical: 12 },
   noteIcon: { alignItems: "center", backgroundColor: colors.cardAlt, borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },
   noteBody: { flex: 1 },
   noteLabel: { color: colors.ink, fontFamily: fonts.bodyBold, fontSize: 12, marginBottom: 4 },
   noteText: { color: colors.ink, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
   dismiss: { alignItems: "center", height: 44, justifyContent: "center", marginRight: -10, marginTop: -8, width: 44 },
+  toast: { alignItems: "center", backgroundColor: "#1F2937", borderRadius: radii.control, bottom: 16, left: 16, minHeight: 44, paddingHorizontal: 16, position: "absolute", right: 16, justifyContent: "center" },
+  toastText: { color: "#FFFFFF", fontFamily: fonts.bodySemi, fontSize: 14 },
 });

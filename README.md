@@ -23,6 +23,9 @@ Nazim is a mobile-first attendance planner built with Expo and React Native. It 
 - Safe-miss calculation based on current attendance history
 - Direct course links into the Simulator
 - Slider-style progress indicator with a marked 75% requirement
+- Validated Add Course bottom sheet with duplicate-code and attendance checks
+- Line chart showing the average attendance trend by lecture
+- Per-course bar chart with live 75% status colors, touch details, and overflow scrolling
 
 ### Simulator
 
@@ -50,6 +53,7 @@ When a course has no recorded classes, the app displays `No classes yet`.
 - React 19 and React Native 0.86
 - React Native Web
 - React Native SVG
+- React Native Chart Kit
 - Lucide and Ionicons
 - AsyncStorage
 - `@dnd-kit/core` for web timetable dragging
@@ -72,21 +76,15 @@ npm install
 
 ## Run on a phone
 
-Tunnel mode works even when the phone and computer are on different networks:
+Install Expo Go on the phone and connect the phone and computer to the same Wi-Fi network. From the project directory, run:
 
 ```bash
-npx expo start --tunnel
+npx expo start --lan --clear
 ```
 
-Open Expo Go and scan the QR code printed in the terminal. Keep the terminal running while using the app.
+Scan the QR code printed in the terminal and keep the terminal running while using the app.
 
-If the phone and computer are on the same Wi-Fi network, LAN mode is usually faster:
-
-```bash
-npx expo start --lan
-```
-
-Clear the Metro cache if the app displays stale code or fails during bundling:
+Tunnel mode can be used when the devices cannot share a local network, although it depends on the external ngrok service:
 
 ```bash
 npx expo start --tunnel --clear
@@ -118,12 +116,14 @@ screens/TodayView.js           Day/week timetable and attendance entry
 screens/DashboardView.js       Attendance overview
 screens/SimulatorView.js       Attendance simulator
 components/AttendanceGauge.js  Animated SVG gauge
+components/AddCourseModal.js   Validated course-entry bottom sheet
 components/CourseRow.js        Compact and expanded attendance rows
 components/MenuSheet.js        Alerts popover
 components/                    Shared interface components
 hooks/useSimulatorState.js     State, persistence, and derived calculations
 data/mockData.js               Sample courses and attendance records
 utils/attendance.js            Attendance helpers
+utils/courseForm.js            Course-form validation and course creation
 constants/theme.js             Design tokens
 .cursorrules                    Project design constraints
 ```

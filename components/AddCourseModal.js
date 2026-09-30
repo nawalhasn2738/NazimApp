@@ -1,49 +1,21 @@
 import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, fonts, radii } from "../constants/theme";
 import { validateNewCourse } from "../utils/courseForm";
-import CustomButton from "./CustomButton";
 
-const EMPTY_VALUES = {
-  code: "",
-  name: "",
-  creditHours: "3",
-  currentGrade: "",
-  expectedScore: "",
-  classesHeld: "",
-  classesAttended: "",
-};
-
-// One entry per input, so the form is generated from data rather than repeated.
+const EMPTY_VALUES = { code: "", name: "", classesAttended: "", classesHeld: "" };
 const FIELDS = [
-  { key: "code", label: "Course code", placeholder: "CS-350", keyboardType: "default" },
-  { key: "name", label: "Course name", placeholder: "Operating Systems", keyboardType: "default" },
-  { key: "creditHours", label: "Credit hours (1-6)", placeholder: "3", keyboardType: "number-pad" },
-  { key: "currentGrade", label: "Current grade (%)", placeholder: "0-100", keyboardType: "number-pad" },
-  { key: "expectedScore", label: "Expected score (%)", placeholder: "0-100", keyboardType: "number-pad" },
-  { key: "classesHeld", label: "Classes held so far", placeholder: "10", keyboardType: "number-pad" },
-  { key: "classesAttended", label: "Classes attended", placeholder: "8", keyboardType: "number-pad" },
+  { key: "code", label: "Course code", placeholder: "CS-410", autoCapitalize: "characters", keyboardType: "default" },
+  { key: "name", label: "Course name", placeholder: "Operating Systems", autoCapitalize: "sentences", keyboardType: "default" },
+  { key: "classesAttended", label: "Classes attended", placeholder: "0", autoCapitalize: "none", keyboardType: "number-pad" },
+  { key: "classesHeld", label: "Total classes held", placeholder: "0", autoCapitalize: "none", keyboardType: "number-pad" },
 ];
 
-/**
- * Form for adding a course. All validation lives in utils/courseForm.js;
- * this component only collects the text and shows the returned errors.
- *
- * @param {{ visible: boolean, courses: Array<{ code: string }>, onSubmit: (course: object) => void, onClose: () => void }} props
- */
 export default function AddCourseModal({ visible, courses, onSubmit, onClose }) {
   const [values, setValues] = useState(EMPTY_VALUES);
   const [errors, setErrors] = useState({});
+  const validation = validateNewCourse(values, courses);
+  const isValid = Boolean(validation.course);
 
   const close = () => {
     setValues(EMPTY_VALUES);
@@ -51,55 +23,58 @@ export default function AddCourseModal({ visible, courses, onSubmit, onClose }) 
     onClose();
   };
 
-  const handleSubmit = () => {
-    const result = validateNewCourse(values, courses);
+  const updateField = (key, text) => {
+    setValues((current) => ({ ...current, [key]: text }));
+    if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
+  };
 
+  const validateField = (key) => {
+    const result = validateNewCourse(values, courses);
+    setErrors((current) => ({ ...current, [key]: result.errors[key] }));
+  };
+
+  const save = () => {
+    const result = validateNewCourse(values, courses);
     if (!result.course) {
       setErrors(result.errors);
       return;
     }
-
     onSubmit(result.course);
     close();
-  };
-
-  const updateField = (key, text) => {
-    setValues((current) => ({ ...current, [key]: text }));
-    if (errors[key]) {
-      setErrors((current) => ({ ...current, [key]: undefined }));
-    }
   };
 
   return (
     <Modal animationType="slide" onRequestClose={close} transparent visible={visible}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
         <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Add a course</Text>
-            <Pressable accessibilityLabel="Close form" accessibilityRole="button" onPress={close} style={styles.closeButton}>
-              <Text style={styles.closeText}>Close</Text>
-            </Pressable>
-          </View>
-
+          <Text style={styles.title}>Add course</Text>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {FIELDS.map((field) => (
               <View key={field.key} style={styles.field}>
                 <Text style={styles.label}>{field.label}</Text>
                 <TextInput
                   accessibilityLabel={field.label}
-                  autoCapitalize={field.keyboardType === "default" ? "words" : "none"}
+                  autoCapitalize={field.autoCapitalize}
                   keyboardType={field.keyboardType}
+                  onBlur={() => validateField(field.key)}
                   onChangeText={(text) => updateField(field.key, text)}
                   placeholder={field.placeholder}
-                  placeholderTextColor={colors.inkMuted}
-                  selectionColor={colors.brand}
+                  placeholderTextColor="#9CA3AF"
+                  selectionColor="#059669"
                   style={[styles.input, errors[field.key] && styles.inputError]}
                   value={values[field.key]}
                 />
                 {errors[field.key] ? <Text style={styles.error}>{errors[field.key]}</Text> : null}
               </View>
             ))}
-            <CustomButton icon="plus" title="Add course" onPress={handleSubmit} style={styles.submit} />
+            <View style={styles.actions}>
+              <Pressable accessibilityRole="button" onPress={close} style={styles.cancelButton}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" disabled={!isValid} onPress={save} style={[styles.saveButton, !isValid && styles.saveButtonDisabled]}>
+                <Text style={[styles.saveText, !isValid && styles.saveTextDisabled]}>Save</Text>
+              </Pressable>
+            </View>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -108,76 +83,19 @@ export default function AddCourseModal({ visible, courses, onSubmit, onClose }) 
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    alignItems: "center",
-    backgroundColor: colors.scrim,
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  // Full width on phones; a centered 560px sheet on wide windows.
-  sheet: {
-    maxWidth: 560,
-    width: "100%",
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    maxHeight: "90%",
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  title: {
-    color: colors.ink,
-    fontFamily: fonts.headingExtra,
-    fontSize: 20,
-  },
-  closeButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    minWidth: 44,
-  },
-  closeText: {
-    color: colors.brand,
-    fontFamily: fonts.bodyBold,
-    fontSize: 14,
-  },
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    color: colors.ink,
-    fontFamily: fonts.bodySemi,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: colors.cardAlt,
-    borderColor: colors.line,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    color: colors.ink,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 16,
-    minHeight: 50,
-    paddingHorizontal: 16,
-  },
-  inputError: {
-    borderColor: colors.bad,
-  },
-  error: {
-    color: colors.bad,
-    fontFamily: fonts.bodyBold,
-    fontSize: 12,
-    marginTop: 8,
-  },
-  submit: {
-    marginBottom: 32,
-    marginTop: 8,
-  },
+  backdrop: { backgroundColor: "rgba(31,41,55,0.35)", flex: 1, justifyContent: "flex-end" },
+  sheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 12, borderTopRightRadius: 12, maxHeight: "90%", padding: 16, width: "100%" },
+  title: { color: "#1F2937", fontFamily: fonts.bodySemi, fontSize: 20, marginBottom: 16 },
+  field: { marginBottom: 16 },
+  label: { color: "#1F2937", fontFamily: fonts.bodySemi, fontSize: 12, marginBottom: 8 },
+  input: { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", borderRadius: radii.control, borderWidth: 1, color: "#1F2937", fontFamily: fonts.body, fontSize: 16, minHeight: 44, paddingHorizontal: 12 },
+  inputError: { borderColor: "#D64560" },
+  error: { color: "#D64560", fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
+  actions: { flexDirection: "row", gap: 12, justifyContent: "flex-end", paddingTop: 8 },
+  cancelButton: { alignItems: "center", height: 44, justifyContent: "center", paddingHorizontal: 12 },
+  cancelText: { color: "#059669", fontFamily: fonts.bodySemi, fontSize: 14 },
+  saveButton: { alignItems: "center", backgroundColor: "#059669", borderRadius: radii.control, height: 44, justifyContent: "center", minWidth: 96, paddingHorizontal: 16 },
+  saveButtonDisabled: { backgroundColor: "#E5E7EB" },
+  saveText: { color: "#FFFFFF", fontFamily: fonts.bodySemi, fontSize: 14 },
+  saveTextDisabled: { color: "#9CA3AF" },
 });

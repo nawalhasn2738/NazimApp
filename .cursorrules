@@ -12,4 +12,11 @@ Color rules:
 - Max 3 screens: Today, Attendance, Simulator. Alerts are a popover.
 - Do not add features, screens, or controls that were not requested.
 
+Assignment exceptions (allowed and required):
+- The Attendance screen has an "Add course" modal form (a modal, not a screen).
+  Entry point is a text button in the "Your courses" heading row, never a floating button.
+- The Attendance screen shows two react-native-chart-kit charts (LineChart, BarChart)
+  below the course rows. Charts must render on the phone layout, not only on wide screens.
+- Chart and form styling must still follow the color and spacing rules above.
+
 After every Cursor run, open the search (Ctrl+Shift+F) and look for leftovers: blue, #2563, shadow, rounded-2xl, fixed bottom. If they show up, tell Cursor to remove them.
