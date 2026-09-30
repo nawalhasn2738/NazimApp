@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AppBar from "../components/AppBar";
 import Card from "../components/Card";
+import AttendanceGauge from "../components/AttendanceGauge";
 import Icon from "../components/Icon";
-import ProgressRing from "../components/ProgressRing";
 import { colors, fonts, radii } from "../constants/theme";
 import { ATTENDANCE_THRESHOLD } from "../data/mockData";
 import { addSimulatedRecord, clearSimulatedRecords, formatCourseCode } from "../utils/attendance";
@@ -40,19 +40,30 @@ export default function SimulatorView({
   updateCourse,
 }) {
   const [selectedCourseId, setSelectedCourseId] = useState(focusCourseId);
+  const chipScrollRef = useRef(null);
+  const chipLayouts = useRef({});
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0] ?? null;
+
+  const scrollCourseIntoView = (courseId) => {
+    const layout = chipLayouts.current[courseId];
+    if (layout) chipScrollRef.current?.scrollTo({ animated: true, x: Math.max(0, layout.x - 16) });
+  };
 
   useEffect(() => {
     if (focusCourseId) setSelectedCourseId(focusCourseId);
   }, [focusCourseId]);
+
+  useEffect(() => {
+    if (!selectedCourse?.id) return undefined;
+    const frame = requestAnimationFrame(() => scrollCourseIntoView(selectedCourse.id));
+    return () => cancelAnimationFrame(frame);
+  }, [selectedCourse?.id]);
 
   if (isLoading) {
     return <View style={styles.centerState}><Text style={styles.centerTitle}>Loading simulator...</Text></View>;
   }
 
   const safeMisses = selectedCourse ? recoveryPlans[selectedCourse.id]?.safeMisses ?? 0 : 0;
-  const isBelowThreshold = selectedCourse?.attendance < ATTENDANCE_THRESHOLD;
-
   return (
     <View style={styles.screen}>
       <AppBar onBack={() => setActiveTab("dashboard")} title="Simulator" />
@@ -60,7 +71,7 @@ export default function SimulatorView({
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {storageError ? <View style={styles.warning}><Text style={styles.warningText}>{storageError}</Text></View> : null}
 
-        <ScrollView contentContainerStyle={styles.chipRow} horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.chipRow} horizontal ref={chipScrollRef} showsHorizontalScrollIndicator={false}>
           {courses.map((course) => {
             const selected = course.id === selectedCourse?.id;
             return (
@@ -69,6 +80,10 @@ export default function SimulatorView({
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 key={course.id}
+                onLayout={(event) => {
+                  chipLayouts.current[course.id] = event.nativeEvent.layout;
+                  if (selected) scrollCourseIntoView(course.id);
+                }}
                 onPress={() => setSelectedCourseId(course.id)}
                 style={[styles.courseChip, selected && styles.courseChipSelected]}
               >
@@ -96,22 +111,13 @@ export default function SimulatorView({
             </View>
 
             <View style={styles.attendanceSummary}>
-              <ProgressRing
-                color={isBelowThreshold ? colors.bad : colors.inkMuted}
-                size={112}
-                strokeWidth={10}
-                threshold={ATTENDANCE_THRESHOLD}
-                trackColor={colors.cardAlt}
-                value={selectedCourse.attendance}
-              >
-                <Text style={styles.ringValue}>{selectedCourse.attendance}%</Text>
-              </ProgressRing>
+              <AttendanceGauge value={selectedCourse.attendance} />
               <View style={styles.dotBlock}>
                 <AttendanceDots records={selectedCourse.attendanceRecords} />
                 <View style={styles.dotLegend}>
-                  <Text style={styles.legendText}>Attended</Text>
-                  <Text style={styles.legendText}>Missed</Text>
-                  <Text style={styles.legendText}>Upcoming</Text>
+                  <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendAttended]} /><Text style={styles.legendText}>Attended</Text></View>
+                  <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendMissed]} /><Text style={styles.legendText}>Missed</Text></View>
+                  <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendUpcoming]} /><Text style={styles.legendText}>Upcoming</Text></View>
                 </View>
               </View>
             </View>
@@ -157,7 +163,7 @@ const styles = StyleSheet.create({
   warningText: { color: colors.bad, fontFamily: fonts.bodyMedium, fontSize: 12 },
   chipRow: { gap: 8, paddingHorizontal: 16, paddingVertical: 16 },
   courseChip: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12 },
-  courseChipSelected: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  courseChipSelected: { backgroundColor: "#D1FAE5", borderColor: "#10B981" },
   chipCode: { color: colors.ink, fontFamily: fonts.bodySemi, fontSize: 12 },
   chipCodeSelected: { color: colors.accent },
   chipPercent: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
@@ -170,14 +176,18 @@ const styles = StyleSheet.create({
   resetButton: { alignItems: "center", justifyContent: "center", minHeight: 36, paddingHorizontal: 8 },
   resetText: { color: colors.accent, fontFamily: fonts.bodySemi, fontSize: 14 },
   attendanceSummary: { alignItems: "center", flexDirection: "row", gap: 16 },
-  ringValue: { color: colors.ink, fontFamily: fonts.headingExtra, fontSize: 28 },
   dotBlock: { flex: 1 },
   dotRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  attendanceDot: { borderRadius: radii.pill, borderWidth: 2, height: 14, width: 14 },
-  dotAttended: { backgroundColor: colors.inkMuted, borderColor: colors.inkMuted },
-  dotMissed: { backgroundColor: colors.bad, borderColor: colors.bad },
-  dotUpcoming: { backgroundColor: "transparent", borderColor: colors.line },
+  attendanceDot: { borderRadius: radii.pill, borderWidth: 1.5, height: 14, width: 14 },
+  dotAttended: { backgroundColor: "#10B981", borderColor: "#10B981" },
+  dotMissed: { backgroundColor: "#D64560", borderColor: "#D64560" },
+  dotUpcoming: { backgroundColor: "transparent", borderColor: "#D1D5DB" },
   dotLegend: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  legendItem: { alignItems: "center", flexDirection: "row", gap: 4 },
+  legendDot: { borderRadius: radii.pill, height: 8, width: 8 },
+  legendAttended: { backgroundColor: "#10B981" },
+  legendMissed: { backgroundColor: "#D64560" },
+  legendUpcoming: { backgroundColor: "transparent", borderColor: "#D1D5DB", borderWidth: 1.5 },
   legendText: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   safeLine: { alignItems: "center", backgroundColor: colors.cardAlt, borderRadius: radii.control, flexDirection: "row", justifyContent: "space-between", marginTop: 24, minHeight: 44, paddingHorizontal: 12 },
   safeLabel: { color: colors.ink, fontFamily: fonts.bodySemi, fontSize: 14 },

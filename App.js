@@ -69,15 +69,21 @@ export default function App() {
     openSimulator(courseId);
   };
 
-  const alertItems = atRisk.length > 0
-    ? atRisk.map((course) => ({
+  const alertItems = courses
+    .filter((course) => course.attendance < ATTENDANCE_THRESHOLD || recoveryPlans[course.id]?.safeMisses === 0)
+    .map((course) => {
+      const isRisk = course.attendance < ATTENDANCE_THRESHOLD;
+      const classesToRecover = Math.max(0, 3 * course.classesHeld - 4 * course.classesAttended);
+      return {
         key: course.id,
-        icon: "alert",
         label: course.name,
-        detail: `${course.attendance}% - below ${ATTENDANCE_THRESHOLD}%`,
+        detail: isRisk
+          ? `Attend next ${classesToRecover} class${classesToRecover === 1 ? "" : "es"} to reach 75%`
+          : "0 safe misses left",
+        isRisk,
         onPress: () => openSimulatorScreen(course.id),
-      }))
-    : [{ key: "none", icon: "attendance", label: "No alerts", detail: "Every course meets the requirement.", disabled: true }];
+      };
+    });
 
   return (
     <SafeAreaProvider>
@@ -132,7 +138,7 @@ export default function App() {
           />
         )}
         </ScreenTransition>
-        <MenuSheet items={alertItems} onClose={() => setAlertsOpen(false)} title="Attendance alerts" visible={alertsOpen} />
+        <MenuSheet items={alertItems} newCount={atRisk.length} onClose={() => setAlertsOpen(false)} visible={alertsOpen} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

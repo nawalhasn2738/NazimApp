@@ -7,7 +7,7 @@ export const colors = {
   line: "#E5E7EB",
   ink: "#111827",
   inkMuted: "#4B5563",
-  // Primary control colour: the near-black pill used for active chips, buttons and the FAB.
+  // Primary brand surfaces and controls.
   header: "#10B981",
   brand: "#059669",
   onBrand: "#FFFFFF",

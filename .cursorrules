@@ -1,6 +1,11 @@
 Design rules (must follow):
-- Accent is emerald only (#10B981 header, #059669 buttons). Never use blue except as a course line color.
-- Risk is red #D64560 only. No other status colors.
+Color rules:
+- Only two functional hues: emerald (#10B981 header/fills, #059669 buttons/text,
+  #D1FAE5 tint) and risk red (#D64560).
+- Everything else is neutral: #F5F5F5, #FFFFFF, #E5E7EB, #9CA3AF, #6B7280, #1F2937.
+- No amber, blue, purple, or orange in the UI. The only exception is the 3px
+  vertical course lines on timetable rows: #2563EB, #EA580C, #DB2777.
+- No pure black (#000) anywhere.
 - No navbar, tab bar, drawer, or floating action buttons.
 - Rows are flat: white, 1px #E5E7EB border, 6px radius, no shadow, 12px padding.
 - Spacing only from 4/8/12/16/24/32. Font sizes only 12/14/16/20/28. Weights 400/500/600.

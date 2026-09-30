@@ -2,17 +2,17 @@ import { Bell, Bookmark, CalendarDays, Check, ChevronRight, MapPin, X } from "lu
 import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, courseColors, fonts, radii } from "../constants/theme";
+import { colors, fonts, radii } from "../constants/theme";
 import { formatCourseCode, recordAttendanceForDate } from "../utils/attendance";
 
 const CLASS_DETAILS = [
-  { start: "10:00", end: "11:00", room: "Lab 2", subtype: "Class" },
-  { start: "10:30", end: "12:00", room: "Room 204", subtype: "Lab" },
+  { start: "09:00", end: "09:50", room: "Room 104", subtype: "Class" },
+  { start: "10:00", end: "10:50", room: "Room 204", subtype: "Class" },
+  { start: "11:00", end: "11:50", room: "Room 301", subtype: "Exam" },
   { start: "13:00", end: "14:30", room: "Room 301", subtype: "Exam" },
-  { start: "14:00", end: "15:30", room: "Lab 1", subtype: "Class" },
+  { start: "14:00", end: "17:00", room: "Lab 1", subtype: "Class" },
 ];
-const WEEK_START_MINUTES = 9 * 60;
-const WEEK_END_MINUTES = 16 * 60;
+const TODAY_COURSE_COLORS = ["#2563EB", "#EA580C", "#DB2777"];
 const HOUR_HEIGHT = 48;
 const DAY_WIDTH = 90;
 
@@ -29,11 +29,13 @@ const toRecordDate = (date) => {
 const classesForDate = (date, courses) => {
   if (courses.length === 0) return [];
   const start = date.getDay() % courses.length;
-  const dayCourses = [courses[start], courses[(start + 1) % courses.length]]
-    .filter((course, index, list) => list.findIndex((item) => item.id === course.id) === index);
-  return dayCourses.map((course) => ({
+  const isToday = date.toDateString() === new Date().toDateString();
+  const classCount = isToday ? 5 : Math.min(2, courses.length);
+  const dayCourses = Array.from({ length: classCount }, (_, index) => courses[(start + index) % courses.length]);
+  return dayCourses.map((course, slot) => ({
     course,
-    detail: CLASS_DETAILS[courses.findIndex((item) => item.id === course.id) % CLASS_DETAILS.length],
+    detail: CLASS_DETAILS[slot % CLASS_DETAILS.length],
+    slot,
   }));
 };
 
@@ -42,12 +44,12 @@ function WeekColumn({ dayIndex, children }) {
   return <View ref={setNodeRef} style={[styles.weekColumn, isOver && styles.weekColumnOver]}>{children}</View>;
 }
 
-function DraggableCourse({ item, color, conflicted }) {
+function DraggableCourse({ item, color, conflicted, weekStartMinutes }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.occurrenceId,
     data: item,
   });
-  const top = ((toMinutes(item.detail.start) - WEEK_START_MINUTES) / 60) * HOUR_HEIGHT;
+  const top = ((toMinutes(item.detail.start) - weekStartMinutes) / 60) * HOUR_HEIGHT;
   const height = ((toMinutes(item.detail.end) - toMinutes(item.detail.start)) / 60) * HOUR_HEIGHT;
   const dragTransform = transform ? [{ translateX: transform.x }, { translateY: transform.y }] : undefined;
 
@@ -82,14 +84,24 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
   const baseOccurrences = days.flatMap((date, dayIndex) => classesForDate(date, courses).map((item) => ({
     ...item,
     dayIndex,
-    occurrenceId: `${dayIndex}-${item.course.id}`,
+    occurrenceId: `${dayIndex}-${item.course.id}-${item.slot}`,
   })));
   const placedOccurrences = baseOccurrences.map((item) => {
     const override = scheduleOverrides[item.occurrenceId];
     return override ? { ...item, dayIndex: override.dayIndex, detail: { ...item.detail, start: override.start, end: override.end } } : item;
   });
+  const weekStartHour = placedOccurrences.length > 0
+    ? Math.floor(Math.min(...placedOccurrences.map((item) => toMinutes(item.detail.start))) / 60)
+    : 9;
+  const weekEndHour = placedOccurrences.length > 0
+    ? Math.ceil(Math.max(...placedOccurrences.map((item) => toMinutes(item.detail.end))) / 60)
+    : 17;
+  const weekStartMinutes = weekStartHour * 60;
+  const weekEndMinutes = Math.max(weekStartHour + 1, weekEndHour) * 60;
+  const visibleHours = Array.from({ length: (weekEndMinutes - weekStartMinutes) / 60 + 1 }, (_, index) => weekStartHour + index);
+  const weekBodyHeight = ((weekEndMinutes - weekStartMinutes) / 60) * HOUR_HEIGHT + 16;
   const weekSchedule = days.map((_, dayIndex) => placedOccurrences.filter((item) => item.dayIndex === dayIndex));
-  const scheduledClasses = weekSchedule[selectedIndex];
+  const scheduledClasses = [...weekSchedule[selectedIndex]].sort((a, b) => toMinutes(a.detail.start) - toMinutes(b.detail.start));
   const averageAttendance = courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + course.attendance, 0) / courses.length) : 0;
   const atRiskCount = courses.filter((course) => course.attendance < 75).length;
   const overlaps = new Map();
@@ -135,7 +147,7 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
     const duration = toMinutes(item.detail.end) - toMinutes(item.detail.start);
     const rawStart = toMinutes(item.detail.start) + (delta.y / HOUR_HEIGHT) * 60;
     const snappedStart = Math.round(rawStart / 15) * 15;
-    const startMinutes = Math.max(WEEK_START_MINUTES, Math.min(WEEK_END_MINUTES - duration, snappedStart));
+    const startMinutes = Math.max(weekStartMinutes, Math.min(weekEndMinutes - duration, snappedStart));
     const formatTime = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
     const previous = scheduleOverrides;
     setScheduleOverrides({
@@ -190,7 +202,7 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
         </View>
 
         <View style={styles.classList}>
-          {scheduledClasses.map(({ course, detail }) => {
+          {scheduledClasses.map(({ course, detail, occurrenceId }) => {
             const savedRecord = course.attendanceRecords.find((record) => record.id === `${course.id}-scheduled-${recordDate}`);
             const mark = (presence) => updateCourse(course.id, recordAttendanceForDate(course, presence, recordDate));
             const now = new Date();
@@ -207,15 +219,15 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
             const isExam = detail.subtype === "Exam";
             const formatDisplayTime = (value) => new Date(`2000-01-01T${value}:00`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
             return (
-              <View key={course.id} style={[styles.classCard, isHappeningNow && styles.classCardNow]}>
+              <View key={occurrenceId} style={[styles.classCard, isHappeningNow && styles.classCardNow]}>
                 <View style={styles.timeColumn}>
                   <Text style={styles.startTime}>{formatDisplayTime(detail.start)}</Text>
                   <Text style={styles.endTime}>{formatDisplayTime(detail.end)}</Text>
                 </View>
-                <View style={[styles.courseLine, { backgroundColor: courseColors[courses.findIndex((item) => item.id === course.id) % courseColors.length] }]} />
+                <View style={[styles.courseLine, { backgroundColor: TODAY_COURSE_COLORS[courses.findIndex((item) => item.id === course.id) % TODAY_COURSE_COLORS.length] }]} />
                 <View style={styles.cardBody}>
                   <View style={styles.titleRow}>
-                    <Text numberOfLines={1} style={styles.courseTitle}>{course.name}</Text>
+                    <Text numberOfLines={2} style={styles.courseTitle}>{course.name}</Text>
                     {isExam ? <Bookmark color={colors.accent} fill={colors.accent} size={14} strokeWidth={2} /> : null}
                   </View>
                   <Text style={styles.subtype}>{detail.subtype}</Text>
@@ -250,14 +262,14 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
                   </View>
                 ))}
               </View>
-              <View style={styles.weekBody}>
+              <View style={[styles.weekBody, { height: weekBodyHeight }]}>
                 <View style={styles.timeAxis}>
-                  {Array.from({ length: 8 }, (_, index) => (
-                    <Text key={index} style={[styles.timeLabel, { top: index * HOUR_HEIGHT - 7 }]}>{String(9 + index).padStart(2, "0")}:00</Text>
+                  {visibleHours.map((hour, index) => (
+                    <Text key={hour} style={[styles.timeLabel, { top: index * HOUR_HEIGHT - 7 }]}>{String(hour).padStart(2, "0")}:00</Text>
                   ))}
                 </View>
                 <View style={styles.dayColumns}>
-                  {Array.from({ length: 8 }, (_, index) => <View key={index} style={[styles.hourLine, { top: index * HOUR_HEIGHT }]} />)}
+                  {visibleHours.map((hour, index) => <View key={hour} style={[styles.hourLine, { top: index * HOUR_HEIGHT }]} />)}
                   {Platform.OS === "web" ? (
                     <DndContext onDragEnd={handleDragEnd}>
                       <View style={styles.columnsRow}>
@@ -265,7 +277,7 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
                           <WeekColumn dayIndex={dayIndex} key={days[dayIndex].toISOString()}>
                             {items.map((item) => {
                               const courseIndex = courses.findIndex((course) => course.id === item.course.id);
-                              return <DraggableCourse color={courseColors[courseIndex % courseColors.length]} conflicted={weekConflicts.has(item.occurrenceId)} item={item} key={item.occurrenceId} />;
+                              return <DraggableCourse color={TODAY_COURSE_COLORS[courseIndex % TODAY_COURSE_COLORS.length]} conflicted={weekConflicts.has(item.occurrenceId)} item={item} key={item.occurrenceId} weekStartMinutes={weekStartMinutes} />;
                             })}
                           </WeekColumn>
                         ))}
@@ -274,11 +286,11 @@ export default function TodayView({ alertCount = 0, courses, recoveryPlans, upda
                   ) : weekSchedule.map((items, dayIndex) => (
                     <View key={days[dayIndex].toISOString()} style={styles.weekColumn}>
                       {items.map((item) => {
-                        const top = ((toMinutes(item.detail.start) - WEEK_START_MINUTES) / 60) * HOUR_HEIGHT;
+                        const top = ((toMinutes(item.detail.start) - weekStartMinutes) / 60) * HOUR_HEIGHT;
                         const height = ((toMinutes(item.detail.end) - toMinutes(item.detail.start)) / 60) * HOUR_HEIGHT;
                         const courseIndex = courses.findIndex((course) => course.id === item.course.id);
                         return (
-                          <View key={item.occurrenceId} style={[styles.weekCourse, weekConflicts.has(item.occurrenceId) && styles.weekCourseConflict, { borderLeftColor: courseColors[courseIndex % courseColors.length], height, top }]}>
+                          <View key={item.occurrenceId} style={[styles.weekCourse, weekConflicts.has(item.occurrenceId) && styles.weekCourseConflict, { borderLeftColor: TODAY_COURSE_COLORS[courseIndex % TODAY_COURSE_COLORS.length], height, top }]}>
                             <Text numberOfLines={2} style={styles.weekCourseCode}>{formatCourseCode(item.course.code)}</Text>
                             <Text style={styles.weekCourseTime}>{item.detail.start}</Text>
                           </View>
@@ -325,18 +337,18 @@ const styles = StyleSheet.create({
   daySelected: { backgroundColor: colors.card },
   dayNumber: { color: colors.onBrand, fontFamily: fonts.bodySemi, fontSize: 14 },
   dayNumberSelected: { color: colors.accent },
-  attendanceStrip: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", marginHorizontal: 16, marginTop: 16, minHeight: 56, padding: 12 },
+  attendanceStrip: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", marginHorizontal: 16, marginTop: 16, minHeight: 56, paddingHorizontal: 12, paddingVertical: 8 },
   attendanceStripCopy: { flex: 1 },
   attendanceStripTitle: { color: colors.ink, fontFamily: fonts.bodySemi, fontSize: 14 },
   attendanceStripMeta: { color: colors.inkMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
   stripPressed: { opacity: 0.8 },
   sectionHeader: { alignItems: "flex-end", flexDirection: "row", justifyContent: "space-between", paddingBottom: 8, paddingHorizontal: 16, paddingTop: 16 },
   sectionTitle: { color: colors.ink, flex: 1, fontFamily: fonts.heading, fontSize: 16 },
-  sectionMeta: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  classList: { paddingHorizontal: 16 },
+  sectionMeta: { color: "#6B7280", fontFamily: fonts.bodyMedium, fontSize: 12 },
+  classList: { gap: 8, paddingHorizontal: 16 },
   classCard: { alignItems: "stretch", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 64, overflow: "hidden" },
   classCardNow: { backgroundColor: colors.accentSoft },
-  timeColumn: { justifyContent: "center", paddingHorizontal: 8, width: 76 },
+  timeColumn: { justifyContent: "center", paddingHorizontal: 12, width: 80 },
   startTime: { color: colors.ink, fontFamily: fonts.bodySemi, fontSize: 12 },
   endTime: { color: colors.inkMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
   courseLine: { width: 3 },
@@ -347,18 +359,18 @@ const styles = StyleSheet.create({
   roomRow: { alignItems: "center", flexDirection: "row" },
   room: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12, marginLeft: 4 },
   actions: { alignItems: "center", flexDirection: "row", gap: 4, paddingRight: 8 },
-  action: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
+  action: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: 1, height: 32, justifyContent: "center", width: 32 },
   actionSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   actionMissed: { backgroundColor: colors.bad, borderColor: colors.bad },
-  weekScroller: { paddingBottom: 16, paddingHorizontal: 16, paddingTop: 24 },
-  weekGrid: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden", width: 44 + DAY_WIDTH * 7 },
+  weekScroller: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 24 },
+  weekGrid: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: radii.control, borderWidth: StyleSheet.hairlineWidth, width: 44 + DAY_WIDTH * 7 },
   weekHeaderRow: { borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", height: 52 },
   timeHeader: { width: 44 },
   weekDayHeader: { alignItems: "center", justifyContent: "center", width: DAY_WIDTH },
   weekDayName: { color: colors.inkMuted, fontFamily: fonts.bodySemi, fontSize: 12 },
   weekDayNumber: { color: colors.ink, fontFamily: fonts.heading, fontSize: 14 },
-  weekBody: { flexDirection: "row", height: ((WEEK_END_MINUTES - WEEK_START_MINUTES) / 60) * HOUR_HEIGHT },
-  timeAxis: { borderRightColor: colors.line, borderRightWidth: StyleSheet.hairlineWidth, position: "relative", width: 44 },
+  weekBody: { flexDirection: "row" },
+  timeAxis: { backgroundColor: colors.card, borderRightColor: colors.line, borderRightWidth: StyleSheet.hairlineWidth, left: 0, position: Platform.OS === "web" ? "sticky" : "relative", width: 44, zIndex: 5 },
   timeLabel: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12, position: "absolute", right: 4 },
   dayColumns: { flexDirection: "row", position: "relative", width: DAY_WIDTH * 7 },
   columnsRow: { flexDirection: "row", height: "100%", width: DAY_WIDTH * 7 },

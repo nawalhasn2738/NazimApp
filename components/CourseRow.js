@@ -1,8 +1,37 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { colors, fonts, radii } from "../constants/theme";
 import { ATTENDANCE_THRESHOLD } from "../data/mockData";
 import { formatCourseCode } from "../utils/attendance";
+
+function AttendanceProgressBar({ value }) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const fill = Math.max(0, Math.min(100, value));
+  const statusColor = fill >= ATTENDANCE_THRESHOLD ? "#10B981" : "#D64560";
+  const thumbLeft = trackWidth > 0
+    ? Math.max(9, Math.min(trackWidth - 9, (fill / 100) * trackWidth))
+    : 9;
+  const thresholdLeft = trackWidth * (ATTENDANCE_THRESHOLD / 100);
+  const showThresholdBubble = Math.abs(fill - ATTENDANCE_THRESHOLD) > 8;
+
+  return (
+    <View style={styles.progressWrap}>
+      {showThresholdBubble && trackWidth > 0 ? (
+        <View style={[styles.thresholdBubble, { left: thresholdLeft - 22 }]}>
+          <Text style={styles.thresholdText}>75%</Text>
+          <View style={styles.caretBorder} />
+          <View style={styles.caretFill} />
+        </View>
+      ) : null}
+      <View onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)} style={styles.track}>
+        <View style={[styles.fill, { backgroundColor: statusColor, width: `${fill}%` }]} />
+        {trackWidth > 0 ? <View style={[styles.thresholdNotch, { left: thresholdLeft - 1 }]} /> : null}
+        {trackWidth > 0 ? <View style={[styles.thumb, { borderColor: statusColor, left: thumbLeft - 9 }]} /> : null}
+      </View>
+    </View>
+  );
+}
 
 export default function CourseRow({ course, isLow, onPress }) {
   const fill = Math.max(0, Math.min(100, course.attendance));
@@ -38,13 +67,7 @@ export default function CourseRow({ course, isLow, onPress }) {
           : "No classes yet"}
       </Text>
 
-      <View style={styles.progressWrap}>
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${fill}%` }]} />
-          <View style={[styles.tick, { left: `${ATTENDANCE_THRESHOLD}%` }]} />
-        </View>
-        <Text style={styles.tickLabel}>75%</Text>
-      </View>
+      <AttendanceProgressBar value={fill} />
 
       <Pressable accessibilityLabel={`Simulate ${course.name}`} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.simulateButton, styles.expandedSimulate, pressed && styles.pressed]}>
         <Text style={styles.simulateText}>Simulate</Text>
@@ -65,11 +88,15 @@ const styles = StyleSheet.create({
   percent: { color: colors.inkMuted, fontFamily: fonts.headingExtra, fontSize: 20 },
   percentRisk: { color: colors.bad },
   recoveryText: { color: colors.bad, fontFamily: fonts.bodySemi, fontSize: 14, marginTop: 16 },
-  progressWrap: { paddingRight: 32, position: "relative" },
-  track: { backgroundColor: colors.cardAlt, borderRadius: radii.pill, height: 8, marginTop: 16, overflow: "hidden" },
-  fill: { backgroundColor: colors.bad, borderRadius: radii.pill, height: "100%" },
-  tick: { backgroundColor: colors.ink, height: "100%", position: "absolute", width: 2 },
-  tickLabel: { color: colors.inkMuted, fontFamily: fonts.bodyMedium, fontSize: 12, position: "absolute", right: 0, top: 12 },
+  progressWrap: { marginTop: 32, position: "relative" },
+  track: { backgroundColor: "#E5E7EB", borderRadius: radii.pill, height: 10, overflow: "visible", position: "relative" },
+  fill: { borderRadius: radii.pill, height: 10 },
+  thumb: { backgroundColor: "#FFFFFF", borderRadius: radii.pill, borderWidth: 3, height: 18, position: "absolute", top: -4, width: 18, zIndex: 3 },
+  thresholdNotch: { backgroundColor: "#9CA3AF", height: 16, position: "absolute", top: -3, width: 2, zIndex: 2 },
+  thresholdBubble: { alignItems: "center", backgroundColor: "#F3F4F6", borderColor: "#E5E7EB", borderRadius: 6, borderWidth: 1, bottom: 18, justifyContent: "center", minHeight: 24, position: "absolute", width: 44, zIndex: 4 },
+  thresholdText: { color: "#4B5563", fontFamily: fonts.bodyMedium, fontSize: 12 },
+  caretBorder: { borderLeftColor: "transparent", borderLeftWidth: 5, borderRightColor: "transparent", borderRightWidth: 5, borderTopColor: "#E5E7EB", borderTopWidth: 5, bottom: -5, height: 0, position: "absolute", width: 0 },
+  caretFill: { borderLeftColor: "transparent", borderLeftWidth: 4, borderRightColor: "transparent", borderRightWidth: 4, borderTopColor: "#F3F4F6", borderTopWidth: 4, bottom: -3, height: 0, position: "absolute", width: 0 },
   simulateButton: { alignItems: "center", justifyContent: "center", minHeight: 36, paddingHorizontal: 8 },
   expandedSimulate: { alignSelf: "flex-end", marginTop: 8 },
   simulateText: { color: colors.accent, fontFamily: fonts.bodySemi, fontSize: 14 },
